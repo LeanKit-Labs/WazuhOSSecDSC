@@ -25,7 +25,9 @@ The **WazuhOSSec** DSC module contains the **WazuhAgentInstall** and **WazuhAgen
 * **Ensure** - Register the agent with the wazuh server. (Present/Absent)
 
 ## Versions
-### 1.0.0
-* Some stuff here
-* More stuff here
+### 1.0.1
+* Included check for Service AND Package in Get() of WazuhAgentInstall
+* More Verbose output in a couple of helper methods
 
+### 1.0.0
+* Initial commit of DSC resource

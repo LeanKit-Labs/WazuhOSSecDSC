@@ -32,11 +32,12 @@ class WazuhAgentInstall
     # Get Method should return only the properties of the resource at the time it is run.
     [WazuhAgentInstall] Get()
     {
-        if (Get-Service -Name "*OSSec*")
+        $_WazuhPackage = Get-Package -Name "*Wazuh*" -ProviderName Programs -ErrorAction SilentlyContinue
+        if ((Get-Service -Name "*OSSec*") -and ($_WazuhPackage.Status -eq "Installed"))
         {
             Write-Verbose "Ossec Service Installed"
             $this.Installed = 'Present'
-            $this.InstalledVersion = (Get-Package -Name "*Wazuh*" -ProviderName Programs).Version
+            $this.InstalledVersion = $_WazuhPackage.Version
             Write-Verbose "Current installed version: $($this.InstalledVersion)"
         }
         else
@@ -114,6 +115,7 @@ class WazuhAgentInstall
         }
         else
         {
+            Write-Verbose "New Version detected: $($InstallerInfo.VersionInfo.Fileversion)"
             return $true
         }
     }
@@ -123,6 +125,7 @@ class WazuhAgentInstall
         try
         {
             Start-Process -NoNewWindow -ErrorAction stop -Filepath $AgentExePath -ArgumentList '/S'
+            Write-Verbos "Agent installation complete."
         }
         catch
         {

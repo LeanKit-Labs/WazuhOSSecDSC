@@ -12,7 +12,7 @@
     RootModule = 'WazuhOSSec.psm1'
 
     # Version number of this module.
-    ModuleVersion = '1.0.0'
+    ModuleVersion = '1.0.1'
 
     # Supported PSEditions
     # CompatiblePSEditions = @()
@@ -30,7 +30,7 @@
     Copyright = '(c) 2017 LeanKit Inc. All rights reserved.'
 
     # Description of the functionality provided by this module
-    # Description = ''
+    Description = 'Install and Register Wazuh Ossec Agent'
 
     # Minimum version of the Windows PowerShell engine required by this module
     PowerShellVersion = '5.0'
@@ -101,7 +101,7 @@
             # LicenseUri = ''
 
             # A URL to the main website for this project.
-            # ProjectUri = ''
+            ProjectUri = 'https://github.com/LeanKit-Labs/WazuhOSSec'
 
             # A URL to an icon representing this module.
             # IconUri = ''
