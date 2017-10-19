@@ -125,7 +125,7 @@ class WazuhAgentInstall
         try
         {
             Start-Process -NoNewWindow -ErrorAction stop -Filepath $AgentExePath -ArgumentList '/S'
-            Write-Verbos "Agent installation complete."
+            Write-Verbose "Agent installation complete."
         }
         catch
         {
