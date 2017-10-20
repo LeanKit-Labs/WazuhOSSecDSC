@@ -16,7 +16,7 @@ The **WazuhOSSec** DSC module contains the **WazuhAgentInstall** and **WazuhAgen
 * **Ensure** - Install or uninstall the agent. (Present/Absent)
 
 ### **WazuhAgentRegister**
-* **AgentName** - The name you want to register for the Agent (Default to hostname $env:ComputerName)
+* **AgentName** - The name you want to register for the Agent.
 * **WazuhServerApiFqdn** - The FQDN of the Wazuh Server. i.e. wazuh.domain.com
 * **WazuhServerApiPort** - The port the Wazuh server is listening on.  Defaults to 55000
 * **UseSelfSignedCerts** - Determines whether to use a self signed cert with the Wazuh server.  Default is false.
@@ -25,9 +25,6 @@ The **WazuhOSSec** DSC module contains the **WazuhAgentInstall** and **WazuhAgen
 * **Ensure** - Register the agent with the wazuh server. (Present/Absent)
 
 ## Versions
-### 1.0.1
-* Included check for Service AND Package in Get() of WazuhAgentInstall
-* More Verbose output in a couple of helper methods
 
 ### 1.0.0
 * Initial commit of DSC resource

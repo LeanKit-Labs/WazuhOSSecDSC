@@ -108,14 +108,14 @@ class WazuhAgentInstall
     [bool] VersionUpgrade($CurrentVersion)
     {
         $this.ValidateInstallerPath()
-        $InstallerInfo = Get-ItemProperty -Path $this.InstallerPath
-        if (($CurrentVersion -eq $InstallerInfo.VersionInfo.Fileversion) -and ($InstallerInfo.VersionInfo.CompanyName -like "*Wazuh*"))
+        $_InstallerInfo = Get-ItemProperty -Path $this.InstallerPath
+        if (($CurrentVersion -eq $_InstallerInfo.VersionInfo.Fileversion) -and ($_InstallerInfo.VersionInfo.CompanyName -like "*Wazuh*"))
         {
             return $false
         }
         else
         {
-            Write-Verbose "New Version detected: $($InstallerInfo.VersionInfo.Fileversion)"
+            Write-Verbose "New Version detected: $($_InstallerInfo.VersionInfo.Fileversion)"
             return $true
         }
     }
@@ -125,7 +125,7 @@ class WazuhAgentInstall
         try
         {
             Start-Process -NoNewWindow -ErrorAction stop -Filepath $AgentExePath -ArgumentList '/S'
-            Write-Verbose "Agent installation complete."
+            Write-Verbose "Agent installation/removal complete."
         }
         catch
         {
@@ -141,6 +141,7 @@ class WazuhAgentInstall
 class WazuhAgentRegister
 {
     #region header
+    # Vast portions of this resource were taken/inspired by the script provided by Wazuh, Inc.
     ###
     #  Powershell script for registering agents automatically with the API
     #  Copyright (C) 2017 Wazuh, Inc. All rights reserved.
@@ -158,7 +159,7 @@ class WazuhAgentRegister
     ###
     #endregion
     [DscProperty(Key)]
-    [String]$AgentName = $env:COMPUTERNAME
+    [String]$AgentName
 
     [DscProperty(Mandatory)]
     [String]$WazuhServerApiFqdn
@@ -289,14 +290,14 @@ class WazuhAgentRegister
         Write-Verbose "Retrieving Agent Key from server"
         #$response = req -method "GET" -resource "/agents/$($agent_id)/key" | ConvertFrom-Json
         #ToDo: I think converFrom-Json on the call lilke above so we don't have to below.
-        $ApiResponse = $this.WazuhApiRequest("Get", "/agents/$($AgentId)/key")
-        If (($ApiResponse | ConvertFrom-Json).error -ne '0')
+        $_ApiResponse = $this.WazuhApiRequest("Get", "/agents/$($AgentId)/key") | ConvertFrom-Json
+        If ($_ApiResponse.error -ne '0')
         {
-            throw "ERROR: $($ApiResponse.message)"
+            throw "ERROR: $($_ApiResponse.message)"
         }
         else
         {
-            $AgentKey = ($ApiResponse | ConvertFrom-Json).data
+            $AgentKey = $_ApiResponse.data
             Write-Verbose "Key for agent '$($AgentId)' received."
         }
         return $AgentKey
@@ -326,17 +327,17 @@ class WazuhAgentRegister
         [System.Net.ServicePointManager]::CertificatePolicy = new-object PolicyCert
     }
 
-    [string]WazuhApiRequest($Method, $resource, $params)
+    [string]WazuhApiRequest($Method, $Resource, $Params)
     {
-        $UserName = ($this.Credential).GetNetworkCredential().UserName
-        $PassWord = ($this.Credential).GetNetworkCredential().Password
-        $base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $UserName, $PassWord)))
+        $_UserName = ($this.Credential).GetNetworkCredential().UserName
+        $_PassWord = ($this.Credential).GetNetworkCredential().Password
+        $_Base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $_UserName, $_PassWord)))
         $this.BaseUrl = "https://" + $this.WazuhServerApiFqdn + ":" + $this.WazuhServerApiPort
-        $Url = $this.BaseUrl + $resource;
+        $_Url = $this.BaseUrl + $Resource;
 
         try
         {
-            return Invoke-WebRequest -Headers @{Authorization = ("Basic {0}" -f $base64AuthInfo)} -Method $Method -Uri $Url -Body $params -UseBasicParsing
+            return Invoke-WebRequest -Headers @{Authorization = ("Basic {0}" -f $_Base64AuthInfo)} -Method $Method -Uri $_Url -Body $Params -UseBasicParsing
         }
         catch
         {
@@ -344,17 +345,17 @@ class WazuhAgentRegister
         }
     }
 
-    [string]WazuhApiRequest($Method, $resource)
+    [string]WazuhApiRequest($Method, $Resource)
     {
-        $UserName = ($this.Credential).GetNetworkCredential().UserName
-        $PassWord = ($this.Credential).GetNetworkCredential().Password
-        $base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $UserName, $PassWord)))
+        $_UserName = ($this.Credential).GetNetworkCredential().UserName
+        $_PassWord = ($this.Credential).GetNetworkCredential().Password
+        $_Base64AuthInfo = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes(("{0}:{1}" -f $_UserName, $_PassWord)))
         $this.BaseUrl = "https://" + $this.WazuhServerApiFqdn + ":" + $this.WazuhServerApiPort
-        $Url = $this.BaseUrl + $resource;
+        $_Url = $this.BaseUrl + $Resource;
 
         try
         {
-            return Invoke-WebRequest -Headers @{Authorization = ("Basic {0}" -f $base64AuthInfo)} -Method $Method -Uri $Url -UseBasicParsing
+            return Invoke-WebRequest -Headers @{Authorization = ("Basic {0}" -f $_Base64AuthInfo)} -Method $Method -Uri $_Url -UseBasicParsing
         }
         catch
         {
@@ -364,13 +365,13 @@ class WazuhAgentRegister
 
     [string]GetAgentInfo()
     {
-        $QueryParameter = @{search = $This.AgentName}
-        return $this.WazuhApiRequest("GET", "/agents", $QueryParameter)
+        $_QueryParameter = @{search = $This.AgentName}
+        return $this.WazuhApiRequest("GET", "/agents", $_QueryParameter)
     }
 
     [void]AgentControl([AgentStatus]$AgentStatus)
     {
-        $ServiceName = "OssecSvc"
+        $_ServiceName = "OssecSvc"
 
         switch ($AgentStatus)
         {
@@ -378,12 +379,12 @@ class WazuhAgentRegister
             {
                 try
                 {
-                    if ((Get-Service -Name "$ServiceName").status -ne "Stopped")
+                    if ((Get-Service -Name "$_ServiceName").status -ne "Stopped")
                     {
                         Write-Verbose "Stopping Agent"
-                        Stop-Service -Name $ServiceName
+                        Stop-Service -Name $_ServiceName
                         Start-Sleep -Seconds 2
-                        if ((Get-Service -Name $ServiceName).Status -eq "Stopped")
+                        if ((Get-Service -Name $_ServiceName).Status -eq "Stopped")
                         {
                             Write-Verbose "Agent Stopped"
                         }
@@ -403,12 +404,12 @@ class WazuhAgentRegister
             {
                 try
                 {
-                    if ((Get-Service -Name "$ServiceName").status -ne "Running")
+                    if ((Get-Service -Name "$_ServiceName").status -ne "Running")
                     {
                         Write-Verbose "Starting Agent"
-                        Start-Service -Name $ServiceName
+                        Start-Service -Name $_ServiceName
                         Start-Sleep -Seconds 2
-                        if ((Get-Service -Name $ServiceName).Status -eq "Running")
+                        if ((Get-Service -Name $_ServiceName).Status -eq "Running")
                         {
                             Write-Verbose "Agent Started"
                         }
@@ -433,54 +434,54 @@ class WazuhAgentRegister
     {
         # Check installed version because the default Config file changed starting with v2.1.0
         # Do a String replpace for newer version vs the Add-Content
-        $AgentConfigFilePath = $this.GetAgentPath() + "\" + $this.AgentConfigFile
-        $InstalledAgentVersion = (Get-Package -Name "*Wazuh*" -ProviderName Programs).Version
-        $WazuhServerIP = $this.GetWazuhServeIP()
-        Write-Verbose "Updating Configuration File: $AgentConfigFilePath with Server IP: $WazuhServerIP"
-        if ($InstalledAgentVersion -ge "2.1.0")
+        $_AgentConfigFilePath = $this.GetAgentPath() + "\" + $this.AgentConfigFile
+        $_InstalledAgentVersion = (Get-Package -Name "*Wazuh*" -ProviderName Programs).Version
+        $_WazuhServerIP = $this.GetWazuhServeIP()
+        Write-Verbose "Updating Configuration File: $_AgentConfigFilePath with Server IP: $_WazuhServerIP"
+        if ($_InstalledAgentVersion -ge "2.1.0")
         {
             try
             {
-                (Get-Content $AgentConfigFilePath) -replace "0.0.0.0", $WazuhServerIP | Out-File $AgentConfigFilePath -Encoding ascii
+                (Get-Content $_AgentConfigFilePath) -replace "0.0.0.0", $_WazuhServerIP | Out-File $_AgentConfigFilePath -Encoding ascii
             }
             catch
             {
-                throw "ERROR: Could not write config file: $AgentConfigFilePath"
+                throw "ERROR: Could not write config file: $_AgentConfigFilePath"
             }
         }
         else
         {
             try
             {
-                Add-Content $AgentConfigFilePath "`n<ossec_config>   <client>      <server-ip>$($WazuhServerIP)</server-ip>   </client> </ossec_config>"
+                Add-Content $_AgentConfigFilePath "`n<ossec_config>   <client>      <server-ip>$($_WazuhServerIP)</server-ip>   </client> </ossec_config>"
             }
             catch
             {
-                throw "ERROR: Could not write config file: $AgentConfigFilePath"
+                throw "ERROR: Could not write config file: $_AgentConfigFilePath"
             }
         }
     }
 
     [bool] InitializePolling()
     {
-        $PollingLogFile = ($this.GetAgentPath()) + "\DSC_Polling.log"
-        if (!(Test-Path -Path $PollingLogFile))
+        $_PollingLogFile = ($this.GetAgentPath()) + "\DSC_Polling.log"
+        if (!(Test-Path -Path $_PollingLogFile))
         {
             #Polling file does not exist so lets create and write Date-Time, Return true
             Write-Verbose "Writing out DSC_Polling.log file"
-            (Get-Date).DateTime | Out-File -FilePath $PollingLogFile -NoNewline
+            (Get-Date).DateTime | Out-File -FilePath $_PollingLogFile -NoNewline
             Return $true
         }
         else
         {
             Write-Verbose "Checking timespan from last Poll"
             #File exists so lets do some Date Maths
-            [datetime] $LastPollTime = Get-Content $PollingLogFile
-            if (($_interval = New-TimeSpan -Start $LastPollTime).TotalMinutes -ge $($this.ApiPollingInterval))
+            [datetime] $_LastPollTime = Get-Content $_PollingLogFile
+            if (($_interval = New-TimeSpan -Start $_LastPollTime).TotalMinutes -ge $($this.ApiPollingInterval))
             {
                 Write-Verbose "Polling interval of `"$([int]$($_interval).TotalMinutes)`" minutes exceeds defined value of $($this.ApiPollingInterval) minutes - Calling API"
                 #Update the DSC_Polling.log file with a new time stamp
-                (Get-Date).DateTime | Out-File -FilePath $PollingLogFile -NoNewline -Force
+                (Get-Date).DateTime | Out-File -FilePath $_PollingLogFile -NoNewline -Force
                 Return $true
             }
             else
