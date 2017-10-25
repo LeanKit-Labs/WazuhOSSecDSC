@@ -195,7 +195,13 @@ class WazuhAgentRegister
     [bool]$AgentRegistered
 
     [DscProperty(NotConfigurable)]
+    [bool]$AgentRegisterExisting
+
+    [DscProperty(NotConfigurable)]
     [AgentStatus]$AgentStatus
+
+    [DscProperty(NotConfigurable)]
+    [string]$AgentIDFromAPI
 
     [WazuhAgentRegister] Get()
     {
@@ -205,30 +211,47 @@ class WazuhAgentRegister
             Write-Verbose "Allowing Self Signed Certs"
             $this.IgnoreSelfSignedCerts()
         }
-        Write-Verbose "Agent Name: $($this.AgentName)"
         $this.BaseUrl = "https://" + $this.WazuhServerApiFqdn + ":" + $this.WazuhServerApiPort
-        Write-Verbose "Base URL: $($this.BaseUrl)"
-        $this.AgentPath = $this.GetAgentPath()
-        Write-Verbose "Agent Path: $($This.AgentPath)"
-        $this.AgentConfigFile = $this.AgentPath + "\" + $this.AgentConfigFile
-        Write-Verbose "OSSec Agent Config: $($This.AgentConfigFile)"
-        $this.WazuhServerApiIP = $this.GetWazuhServeIP()
-        Write-Verbose "Wazuh Server IP: $($This.WazuhServerApiIP)"
 
-        # This block uses the ApiPollingInterval value to determine if it should poll for Agent Registration.
-        #   We put this in to alleviate unnecessary API calls to the server. Other wise every time DSC ran this would make a call
-        #   to the API to verify the Agent was registered. Most of which would return back $true.
-        #   If no ApiPollingInterval is set it wll poll each time
-        if (($this.ApiPollingInterval -eq 0) -or (($this.InitializePolling()) -and ($this.ApiPollingInterval -ne 0)))
+        if ($this.Ensure -eq [Ensure]::Present)
         {
-            #If PollingInterval is 0 cleanup the polling file so we don't have any lingering data lying around should the interval change later
-            if (($this.ApiPollingInterval -eq 0) -and (Test-Path ($this.AgentPath + "\DSC_Polling.log") -PathType Leaf))
+            $this.AgentPath = $this.GetAgentPath()
+            $this.AgentConfigFile = $this.AgentPath + "\" + $this.AgentConfigFile
+            $this.WazuhServerApiIP = $this.GetWazuhServeIP()
+            Write-Verbose "Agent Name: $($this.AgentName)"
+            Write-Verbose "Base URL: $($this.BaseUrl)"
+            Write-Verbose "Agent Path: $($This.AgentPath)"
+            Write-Verbose "OSSec Agent Config: $($This.AgentConfigFile)"
+            Write-Verbose "Wazuh Server IP: $($This.WazuhServerApiIP)"
+
+            # This block uses the ApiPollingInterval value to determine if it should poll for Agent Registration.
+            #   We put this in to alleviate unnecessary API calls to the server. Other wise every time DSC ran this would make a call
+            #   to the API to verify the Agent was registered. Most of which would return back $true.
+            #   If no ApiPollingInterval is set it wll poll each time
+            if (($this.ApiPollingInterval -eq 0) -or (($this.InitializePolling()) -and ($this.ApiPollingInterval -ne 0)))
             {
-                Remove-Item -Path ($this.AgentPath + "\DSC_Polling.log") -Force
+                #If PollingInterval is 0 cleanup the polling file so we don't have any lingering data lying around should the interval change later
+                if (($this.ApiPollingInterval -eq 0) -and (Test-Path ($this.AgentPath + "\DSC_Polling.log") -PathType Leaf))
+                {
+                    Write-Verbose "ApiPollingInterval set to 0, Cleaning up Polling Log File"
+                    Remove-Item -Path ($this.AgentPath + "\DSC_Polling.log") -Force
+                }
+                $_RegistrationStatus = $this.RegistrationStatus()
+                $this.AgentRegistered = $_RegistrationStatus.AgentRegistered
+                $this.AgentRegisterExisting = $_RegistrationStatus.AgentRegisterExisting
             }
-            $AgentPollResult = $this.GetAgentInfo()
+            else
+            {
+                #No need to poll for agent status so assume Registered with the server
+                $this.AgentRegistered = $true
+            }
+            return $this
+        }
+        else
+        {
+            $_AgentMetaData = $this.GetAgentInfo() | ConvertFrom-Json
             #If Total Items greater than or equal to 1 the agent should be registered
-            if (($agentPollResult | ConvertFrom-Json).data.totalitems -ge 1)
+            if (($_AgentMetaData).data.totalitems -ge 1)
             {
                 $this.AgentRegistered = $true
             }
@@ -236,34 +259,54 @@ class WazuhAgentRegister
             {
                 $this.AgentRegistered = $false
             }
+            return $this
         }
-        else
-        {
-            #No need to poll for agent status so assume Registered with the server
-            $this.AgentRegistered = $true
-        }
-        return $this
     }
 
     [bool] Test()
     {
-        $this.Get()
-        if (!($this.AgentRegistered))
+        $_Get = $this.Get()
+        if ($this.Ensure -eq [Ensure]::Present)
         {
+            if ($_Get.AgentRegistered)
+            {
+                Write-Verbose "Agent is registered.  GOOD JOB!"
+                return $true
+            }
+            Write-Verbose "Agent is not registered, Begin registration process."
             return $false
         }
-        return $true
+        else # Ensure = Absent
+        {
+            Write-Verbose "Ensure set to `"Absent`", Checking for existing Agent."
+            if (!($_Get.AgentRegistered))
+            {
+                Write-Verbose "No Agent found on server."
+                return $true
+            }
+            Write-Verbose "Agent found on server, begin deletion process."
+            return $false
+        }
     }
 
     [void] Set()
     {
-        # Register the Agent, Get the Key from Wazuh Server, Import the Key, update ossec.conf, and restart the Agent service
-        $AgentRegisterResponse = $this.AgentRegisterNew()
-        $AgentKeyResponse = $this.GetAgentKey($AgentRegisterResponse)
-        $this.ImportAgentKey($AgentKeyResponse)
-        $this.AgentControl([AgentStatus]::Stop)
-        $this.UpdateConfigFile()
-        $this.AgentControl([AgentStatus]::Start)
+        $_Get = $this.RegistrationStatus()
+
+        if ($_Get.AgentRegisterExisting -or ($this.Ensure -eq [Ensure]::Absent))
+        {
+            # If there is an existing Agent, Deleted the old and Re-Register as a new agent
+            $this.AgentRegisterDelete($this.AgentIDFromAPI)
+        }
+        if ($this.Ensure -eq [Ensure]::Present)
+        {
+            $_AgentRegisterResponseId = $this.AgentRegisterNew()
+            $_AgentKeyResponse = $this.GetAgentKey($_AgentRegisterResponseId)
+            $this.ImportAgentKey($_AgentKeyResponse)
+            $this.AgentControl([AgentStatus]::Stop)
+            $this.UpdateConfigFile()
+            $this.AgentControl([AgentStatus]::Start)
+        }
     }
 
     #region Helper Methods
@@ -284,12 +327,26 @@ class WazuhAgentRegister
         }
     }
 
+    [string]AgentRegisterDelete($AgentId)
+    {
+        Write-Verbose "Deleting Agent from server: $($This.AgentName)"
+        $ApiResponse = $this.WazuhApiRequest("DELETE", "/agents/$($AgentId)") | ConvertFrom-Json
+        If ($ApiResponse.error -ne '0')
+        {
+            throw "ERROR: $($ApiResponse.message)"
+        }
+        else
+        {
+            Write-Verbose "Agent Deleted: (Agent - $($this.AgentName)) / (ID - $($AgentId))"
+            return $AgentId
+        }
+    }
+
     [string] GetAgentKey($AgentId)
     {
-        # Getting agent key from manager
+        # Small sleep, experienced a timing issue after registering
+        Start-Sleep -Seconds 2
         Write-Verbose "Retrieving Agent Key from server"
-        #$response = req -method "GET" -resource "/agents/$($agent_id)/key" | ConvertFrom-Json
-        #ToDo: I think converFrom-Json on the call lilke above so we don't have to below.
         $_ApiResponse = $this.WazuhApiRequest("Get", "/agents/$($AgentId)/key") | ConvertFrom-Json
         If ($_ApiResponse.error -ne '0')
         {
@@ -309,8 +366,9 @@ class WazuhAgentRegister
         Write-Output "y" | & "$($this.GetAgentPath())\manage_agents.exe" "-i $($AgentKey)" "y`r`n"
     }
 
-    # If UseSelfSignedCerts=$true modify Certificate Policy to allow
+
     [void]IgnoreSelfSignedCerts()
+    # If UseSelfSignedCerts=$true modify Certificate Policy to allow
     {
         add-type @"
     using System.Net;
@@ -492,7 +550,6 @@ class WazuhAgentRegister
         }
     }
 
-    #The following two methods are used in various other methods so we broke them out to reduce code and make it simpler...we hope.
     [string]GetWazuhServeIP()
     {
         Write-Verbose "Resolving Wazuh Server IP Address"
@@ -508,14 +565,64 @@ class WazuhAgentRegister
 
     [string]GetAgentPath()
     {
-        if ($_AgentPath = (Get-Package -Name "*wazuh*").Meta.Attributes.Get_Item("UninstallString").trim([char]"`"") | Split-Path )
+        if ($_AgentPath = (Get-Package -Name "*wazuh*" -ErrorAction SilentlyContinue))
         {
+            $_AgentPath = $_AgentPath.Meta.Attributes.Get_Item("UninstallString").trim([char]"`"") | Split-Path
             return $_AgentPath
         }
         else
         {
             throw "Error: Unable to locate the Agent installation path"
         }
+    }
+
+    [hashtable]RegistrationStatus()
+    {
+        $_RegistrationStatus = [Hashtable]::new()
+        $_AgentMetaData = $this.GetAgentInfo() | ConvertFrom-Json
+        #If Total Items greater than or equal to 1 the agent should be registered
+        if (($_AgentMetaData).data.totalitems -ge 1)
+        {
+            Write-Verbose "Existing Agent found"
+            # Setting this value here so we can use it in the Set() Method to pull back Keys
+            $this.AgentIDFromAPI = $_AgentMetaData.data.items.id
+            #We need Path to Client.keys File C:|Program FIles (x86)\Ossec-agent
+            if (Test-Path ($this.AgentPath + "\Client.keys"))
+            {
+                Write-Verbose "Existing Client.Keys file found"
+                $_clientKeyFilePath = $this.AgentPath + "\Client.keys"
+                $_currentID = ((Get-Content -Path $_clientKeyFilePath).Split(' '))[0]
+                $_currentStatus = ($_AgentMetaData).data.items.status
+                if ((($this.AgentIDFromAPI) -eq $_currentID) -and ($_currentStatus) -ne "Never connected" )
+                {
+                    Write-Verbose "Current Agent ID matches Manager Agent ID and Status is Active or Disconnected - Assuming Agent Registered"
+                    #Total Items ge 1, There is a CLient.keys file, the Agent ID from API and Client.keys match, and the agent status is disconnected or active
+                    $_RegistrationStatus.add('AgentRegistered', $true)
+                }
+                else
+                {
+                    Write-Verbose "Client.Keys file exists but Agent IDs do not match or Status is `"Never Connected`""
+                    # Total Items ge 1, there is a CLient.keys file, and Status is "Never Connected"
+                    # Use the "Insert" API to re-use the Agent ID
+                    $_RegistrationStatus.add('AgentRegistered', $false)
+                    $_RegistrationStatus.add('AgentRegisterExisting', $true)
+                }
+            }
+            else
+            {
+                Write-Verbose "No Client.Keys file exists, assuming not registered"
+                #Total Items ge 1, There is no CLient.keys file
+                # Use the "Insert" API to re-use the Agent ID
+                $_RegistrationStatus.add('AgentRegistered', $false)
+                $_RegistrationStatus.add('AgentRegisterExisting', $true)
+            }
+        }
+        else
+        {
+            Write-Verbose "No Agent found on Manager, Agent not registered"
+            $_RegistrationStatus.add('AgentRegistered', $false)
+        }
+        Return $_RegistrationStatus
     }
 
     #endregion
