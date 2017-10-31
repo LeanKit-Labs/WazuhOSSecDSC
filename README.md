@@ -1,3 +1,9 @@
+## Build Status
+|Master|
+|:-:|
+|[![Build status](https://ci.appveyor.com/api/projects/status/9xllcmxg1atb9wsk/branch/master?svg=true)](https://ci.appveyor.com/project/MarcoCrank/wazuhossecdsc/branch/master)|
+
+
 # WazuhOSSecDSC
 Powershell DSC Class based resource for installing and configuring the Wazuh Agent
 
