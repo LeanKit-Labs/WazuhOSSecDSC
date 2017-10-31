@@ -1,6 +1,15 @@
 {
     // When enabled, will trim trailing whitespace when you save a file.
     "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
     "editor.formatOnSave": false,
-    "powershell.codeFormatting.preset": "Allman"
+    "powershell.codeFormatting.preset": "Allman",
+    "powershell.codeFormatting.openBraceOnSameLine": false,
+    "powershell.codeFormatting.newLineAfterOpenBrace": false,
+    "powershell.codeFormatting.newLineAfterCloseBrace": true,
+    "powershell.codeFormatting.whitespaceBeforeOpenBrace": true,
+    "powershell.codeFormatting.whitespaceBeforeOpenParen": true,
+    "powershell.codeFormatting.whitespaceAroundOperator": true,
+    "powershell.codeFormatting.whitespaceAfterSeparator": true,
+    "powershell.codeFormatting.ignoreOneLineBlock": false
 }
