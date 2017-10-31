@@ -22,7 +22,8 @@ skip_commits:
 install:
   - git clone https://github.com/LeanKit-Labs/WazuhOSSecDSC.git
   - ps: Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
-  - ps: Install-Module -Name Pester -Repository PSGallery -Force
+  - ps: Install-Module -Name Pester -Repository PSGallery -Force -SkipPublisherCheck
+  - ps: Install-Module -Name PSScriptAnalyzer -Force
 
 
 #---------------------------------#
