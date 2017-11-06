@@ -32,12 +32,12 @@ class WazuhAgentInstall
     # Get Method should return only the properties of the resource at the time it is run.
     [WazuhAgentInstall] Get()
     {
-        $_WazuhPackage = Get-Package -Name "*Wazuh*" -ProviderName Programs -ErrorAction SilentlyContinue
-        if ((Get-Service -Name "*OSSec*") -and ($_WazuhPackage.Status -eq "Installed"))
+        $_WazuhPackage = $this.GetInstallInformation()
+        if ((Get-Service -Name "*OSSec*") -and ($_WazuhPackage))
         {
             Write-Verbose "Ossec Service Installed"
             $this.Installed = 'Present'
-            $this.InstalledVersion = $_WazuhPackage.Version
+            $this.InstalledVersion = $_WazuhPackage.DisplayVersion
             Write-Verbose "Current installed version: $($this.InstalledVersion)"
         }
         else
@@ -79,7 +79,7 @@ class WazuhAgentInstall
             try
             {
                 Write-Verbose "Uninstalling Wazuh OSSec Agent"
-                $UninstallString = ((Get-Package -Name "*Wazuh*" -ProviderName Programs -ErrorAction Stop).Meta.Attributes.Get_Item("UninstallString")).trim([char]"`"")
+                $UninstallString = (($this.GetInstallInformation()).UninstallString.trim([char]"`""))
                 $this.WazuhInstaller($UninstallString)
             }
             catch [System.Exception]
@@ -131,6 +131,12 @@ class WazuhAgentInstall
         {
             throw $_.Exception
         }
+    }
+
+    [PSCustomObject] GetInstallInformation()
+    {
+        $AgentRegistryPath = 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+        Return Get-ItemProperty -Path $AgentRegistryPath | Where-Object {$_.DisplayName -like "*Wazuh*"}
     }
 
     #endregion
@@ -493,7 +499,7 @@ class WazuhAgentRegister
         # Check installed version because the default Config file changed starting with v2.1.0
         # Do a String replpace for newer version vs the Add-Content
         $_AgentConfigFilePath = $this.GetAgentPath() + "\" + $this.AgentConfigFile
-        $_InstalledAgentVersion = (Get-Package -Name "*Wazuh*" -ProviderName Programs).Version
+        $_InstalledAgentVersion = $this.GetInstallInformation().DisplayVersion
         $_WazuhServerIP = $this.GetWazuhServeIP()
         Write-Verbose "Updating Configuration File: $_AgentConfigFilePath with Server IP: $_WazuhServerIP"
         if ($_InstalledAgentVersion -ge "2.1.0")
@@ -565,9 +571,9 @@ class WazuhAgentRegister
 
     [string]GetAgentPath()
     {
-        if ($_AgentPath = (Get-Package -Name "*wazuh*" -ErrorAction SilentlyContinue))
+        if ($_AgentPath = $this.GetInstallInformation())
         {
-            $_AgentPath = $_AgentPath.Meta.Attributes.Get_Item("UninstallString").trim([char]"`"") | Split-Path
+            $_AgentPath = $_AgentPath.UninstallString.trim([char]"`"") | Split-Path
             return $_AgentPath
         }
         else
@@ -623,6 +629,12 @@ class WazuhAgentRegister
             $_RegistrationStatus.add('AgentRegistered', $false)
         }
         Return $_RegistrationStatus
+    }
+
+    [PSCustomObject] GetInstallInformation()
+    {
+        $AgentRegistryPath = 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+        Return Get-ItemProperty -Path $AgentRegistryPath | Where-Object {$_.DisplayName -like "*Wazuh*"}
     }
 
     #endregion
