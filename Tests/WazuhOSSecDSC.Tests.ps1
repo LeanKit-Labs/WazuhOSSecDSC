@@ -26,10 +26,7 @@ Describe 'Module Manifest Tests' {
         ($Manifest.PrivateData.PSData.LicenseUri + $Manifest.PrivateData.PSData.ProjectUri) | should not benullorempty
     }
 
-    it 'Must pass Test-ModuleManifest validation' {
-        Test-ModuleManifest -Path $ModuleManifestPath -ErrorAction SilentlyContinue | should be $true
-    }
-
+    #Update path to tests
     it 'Must have associated Pester tests' {
         "$ModuleManifestPath" | should exist
     }

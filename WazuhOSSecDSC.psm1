@@ -68,7 +68,7 @@ class WazuhAgentInstall
         if ($this.Ensure -eq [Ensure]::Present)
         {
             Write-Verbose -Message "Installing/Updating OSSEC Agent"
-            if ($this.ValidateInstallerPath())
+            if ($this.ValidateInstallerPath($this.InstallerPath))
             {
                 Write-Verbose "Starting Wazuh OSSEC Installer"
                 $this.WazuhInstaller($this.InstallerPath)
@@ -76,30 +76,27 @@ class WazuhAgentInstall
         }
         elseif ($this.Ensure -eq [Ensure]::Absent)
         {
-            try
+            $UninstallString = (($this.GetInstallInformation()).UninstallString.trim([char]"`""))
+
+            if ($this.ValidateInstallerPath($UninstallString))
             {
                 Write-Verbose "Uninstalling Wazuh OSSec Agent"
-                $UninstallString = (($this.GetInstallInformation()).UninstallString.trim([char]"`""))
                 $this.WazuhInstaller($UninstallString)
-            }
-            catch [System.Exception]
-            {
-                Write-Verbose "$($_.Exception.Message)"
             }
         }
     }
 
     #region Helper Methods
-    [bool] ValidateInstallerPath()
+    [bool] ValidateInstallerPath($Path)
     {
         #Determine if the Installer Path is valid and if so get the FilVersion Attribute for Test() Method
-        if (Test-Path -Path $this.InstallerPath -PathType Leaf)
+        if (Test-Path -Path $Path -PathType Leaf)
         {
             return $true
         }
         else
         {
-            Write-Verbose "File not found: $($this.InstallerPath)"
+            Write-Verbose "File not found: $($Path)"
             throw [System.IO.FileNotFoundException]
         }
     }
@@ -107,7 +104,7 @@ class WazuhAgentInstall
     #Compare the installed version vs the one supplied to determine if this is an upgrade
     [bool] VersionUpgrade($CurrentVersion)
     {
-        $this.ValidateInstallerPath()
+        $this.ValidateInstallerPath($this.InstallerPath)
         $_InstallerInfo = Get-ItemProperty -Path $this.InstallerPath
         if (($CurrentVersion -eq $_InstallerInfo.VersionInfo.Fileversion) -and ($_InstallerInfo.VersionInfo.CompanyName -like "*Wazuh*"))
         {
