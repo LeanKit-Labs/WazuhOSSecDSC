@@ -304,6 +304,7 @@ class WazuhAgentRegister
             # If there is an existing Agent, Deleted the old and Re-Register as a new agent
             $this.AgentRegisterDelete($this.AgentIDFromAPI)
         }
+
         if ($this.Ensure -eq [Ensure]::Present)
         {
             $_AgentRegisterResponseId = $this.AgentRegisterNew()
@@ -333,7 +334,7 @@ class WazuhAgentRegister
         }
     }
 
-    [string]AgentRegisterDelete($AgentId)
+    [void]AgentRegisterDelete($AgentId)
     {
         Write-Verbose "Deleting Agent from server: $($This.AgentName)"
         $ApiResponse = $this.WazuhApiRequest("DELETE", "/agents/$($AgentId)") | ConvertFrom-Json
@@ -344,7 +345,6 @@ class WazuhAgentRegister
         else
         {
             Write-Verbose "Agent Deleted: (Agent - $($this.AgentName)) / (ID - $($AgentId))"
-            return $AgentId
         }
     }
 
@@ -369,7 +369,7 @@ class WazuhAgentRegister
     [void]ImportAgentKey($AgentKey)
     {
         Write-Verbose "Importing authentication key"
-        Write-Output "y" | & "$($this.GetAgentPath())\manage_agents.exe" "-i $($AgentKey)" "y`r`n"
+        Invoke-Expression -Command "Write-Output y | & `"$($this.GetAgentPath())\manage_agents.exe`" -i $($AgentKey) y`r`n" -Verbose
     }
 
 
